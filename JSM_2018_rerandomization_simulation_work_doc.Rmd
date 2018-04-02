@@ -1,0 +1,11 @@
+---
+title: "JSM 2018 Rerandomization Simulations"
+author: "Crystal Shaw"
+date: "4/2/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
