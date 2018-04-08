@@ -26,11 +26,6 @@ p_load("tidyverse", "MASS")
 ## Simulation Studies
 
 ```{r Uncorrelated (10 Covariates)}
-#covariance matrix for completely uncorrelated random variables
-covmat_none <- diag(11)
-
-
-
 
 ```
 
