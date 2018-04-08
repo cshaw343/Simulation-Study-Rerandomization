@@ -9,3 +9,31 @@ output: pdf_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+```{r pacman, echo = FALSE, message = FALSE, warning = FALSE}
+if (!require("pacman")) 
+install.packages("pacman", repos = 'http://cran.us.r-project.org')
+options(scipen = 999)
+```
+
+The following packages were used in the proceeding analyses:
+
+```{r packages, message = FALSE, warning = FALSE, echo = TRUE}
+p_load("tidyverse", "MASS")
+```
+
+## Introduction/Motivation
+
+## Simulation Studies
+
+```{r Uncorrelated (10 Covariates)}
+#covariance matrix for completely uncorrelated random variables
+covmat_none <- diag(11)
+
+
+
+
+```
+
+## Conclusion
+
+## References
