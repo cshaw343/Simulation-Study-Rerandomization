@@ -2,6 +2,7 @@
 title: "JSM 2018 Rerandomization Simulations"
 author: "Crystal Shaw"
 output: pdf_document
+bibliography: JSM2018bib.bib
 ---
 
 ```{r setup, include=FALSE}
@@ -22,6 +23,7 @@ p_load("tidyverse", "MASS")
 
 ## Introduction/Motivation
 
+
 ## Simulation Studies: All Covariates
 
 ```{r Uncorrelated (10 Covariates)}
@@ -29,7 +31,7 @@ p_load("tidyverse", "MASS")
 
 ```
 
-## Simulation Studies:  Tiers of Covariates
+## Simulation Studies: Tiers of Covariates
 
 ## Conclusion
 
