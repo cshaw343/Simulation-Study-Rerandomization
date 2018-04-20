@@ -6,7 +6,7 @@ bibliography: JSM2018bib.bib
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE, fig.pos = "h")
 ```
 
 ```{r pacman, echo = FALSE, message = FALSE, warning = FALSE}
@@ -23,9 +23,22 @@ p_load("tidyverse", "MASS")
 
 ## Introduction/Motivation
 
-Randomization has long been accepted as the "gold standard" in experimental design due to its ability to guard against confounding by creating balanced covariates across treatment groups on average.  Once underway, a randomized control trial (RCT) possesses a specified randomization scheme which when left to chance can produce unacceptable balance in one or more covariates more often than expected.  For a fixed $\alpha$-level, the probability of a significant difference in at least one covariate is given by $$1 - (1 - \alpha)^n, $$ where $n$ is the number of covariates being measured.     
+Randomization has long been accepted as the "gold standard" in experimental design due to its ability to guard against confounding by creating balanced covariates across treatment groups on average.  Once underway, a randomized control trial (RCT) possesses a specified randomization scheme which when left to chance can produce unacceptable balance in one or more covariates more often than expected.  For a fixed $\alpha$ level, the probability of a significant difference in at least one covariate is given by $$1 - (1 - \alpha)^n, $$ where $n$ is the number of covariates. Figure \ref{fig:Covariate Imbalance Plot} illustrates the near certainty of covariate imbalances in high dimensional data settings.
 
-Rerandomization, dubbed the “platinum standard” in experimental design @Tukey1993 @Treasure1998, can ensure covariate balance and preserve the integrity of inferences. In practice, the balance between design optimality and feasibility is crucial.  The computationally intensive nature of this allocation procedure and subsequent analysis necessitates a deeper understanding of the interplay between the reduction in variance of both covariate mean differences and treatment effects, the correlation among the measured covariates, and the effect of these reduced measures on coverage probabilities for the mean difference in treatment effect. Through a series of simulation studies, we explore the sensitivity of traditional testing procedures to rerandomization based on various criteria including the affinely invariant Mahalanobis distance @Morgan2012 and tiered covariate balancing @LockMORGAN. 
+```{r Covariate Imbalance Plot, fig.align = "center", fig.cap = "Probability of imbalance in at least one covariate.", out.width = "60%"}
+cov_imb <- function(n){
+  1 - (1 - 0.05)^n
+}
+
+ggplot(data = data.frame(x = 0), mapping = aes(x = x)) +
+  stat_function(fun = cov_imb) + xlim(0,100) + 
+  labs(y = "P(at least one covariate imbalance)", 
+       x = "Number of covariates", 
+       title = "Probability of covariate imbalance as a function of \n the number of covariates") + 
+  theme_minimal()
+```
+
+Rerandomization, dubbed the “platinum standard” in experimental design (@Tukey1993 @Treasure1998), can ensure covariate balance and preserve the integrity of inferences. In practice, the balance between design optimality and feasibility is crucial.  The computationally intensive nature of this allocation procedure and subsequent analysis necessitates a deeper understanding of the interplay between the reduction in variance of both covariate mean differences and treatment effects, the correlation among the measured covariates, and the effect of these reduced measures on coverage probabilities for the mean difference in treatment effect. Through a series of simulation studies, we explore the sensitivity of traditional testing procedures to rerandomization based on various criteria including the affinely invariant Mahalanobis distance @Morgan2012 and tiered covariate balancing @LockMORGAN. 
 
 
 ## Simulation Studies: All Covariates
