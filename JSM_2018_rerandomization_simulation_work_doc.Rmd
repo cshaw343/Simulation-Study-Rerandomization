@@ -1,15 +1,23 @@
 ---
 title: "JSM 2018 Rerandomization Simulations"
 author: "Crystal Shaw"
-output: 
+header-includes:
+- \usepackage{float}
+- \floatplacement{figure}{H}
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '2'
+    theme: "yeti"
   pdf_document:
-    toc: true
+    toc: yes
     toc_depth: 2
 bibliography: JSM2018bib.bib
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE, fig.pos = "h")
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
 ```
 
 ```{r pacman, echo = FALSE, message = FALSE, warning = FALSE}
@@ -21,14 +29,14 @@ options(scipen = 999)
 The following packages were used in the proceeding analyses:
 
 ```{r packages, message = FALSE, warning = FALSE, echo = TRUE}
-p_load("tidyverse", "MASS")
+p_load("tidyverse", "MASS", "GreedyExperimentalDesign")
 ```
 
-## Introduction/Motivation
+# Introduction/Motivation
 
-Randomization has long been accepted as the "gold standard" in experimental design due to its ability to guard against confounding by creating balanced covariates across treatment groups on average.  Once underway, a randomized control trial (RCT) possesses a specified randomization scheme which when left to chance can produce unacceptable balance in one or more covariates more often than expected.  For a fixed $\alpha$ level, the probability of a significant difference in at least one covariate is given by $$1 - (1 - \alpha)^n, $$ where $n$ is the number of covariates. Figure \ref{fig:Covariate Imbalance Plot} illustrates the near certainty of covariate imbalances in high dimensional data settings.
+Randomization has long been accepted as the "gold standard" in experimental design due to its ability to guard against confounding by creating balanced covariates across treatment groups on average.  Once underway, a randomized control trial (RCT) possesses a specified randomization scheme which when left to chance can produce unacceptable balance in one or more covariates more often than expected.  For a fixed $\alpha$ level, the probability of a significant difference in at least one covariate is given by $$1 - (1 - \alpha)^k, $$ where $k$ is the number of independent covariates. Figure \ref{fig:Covariate Imbalance Plot} illustrates the near certainty of covariate imbalances in high dimensional data settings.
 
-```{r Covariate Imbalance Plot, fig.align = "center", fig.cap = "Probability of imbalance in at least one covariate.", out.width = "60%"}
+```{r Covariate Imbalance Plot, fig.align = "center", fig.cap = "Probability of imbalance in at least one covariate.", out.width = "55%"}
 cov_imb <- function(n){
   1 - (1 - 0.05)^n
 }
@@ -41,18 +49,48 @@ ggplot(data = data.frame(x = 0), mapping = aes(x = x)) +
   theme_minimal()
 ```
 
-Rerandomization, dubbed the “platinum standard” in experimental design (@Tukey1993 @Treasure1998), can ensure covariate balance and preserve the integrity of inferences. In practice, the balance between design optimality and feasibility is crucial.  The computationally intensive nature of this allocation procedure and subsequent analysis necessitates a deeper understanding of the interplay between the reduction in variance of both covariate mean differences and treatment effects, the correlation among the measured covariates, and the effect of these reduced measures on coverage probabilities for the mean difference in treatment effect. Through a series of simulation studies, we explore the sensitivity of traditional testing procedures to rerandomization based on various criteria including the affinely invariant Mahalanobis distance (@Morgan2012) and tiered covariate balancing (@LockMORGAN). 
+Rerandomization, dubbed the “platinum standard” in experimental design (@Tukey1993, @Treasure1998), can ensure covariate balance and preserve the integrity of inferences. In practice, the balance between design optimality and feasibility is crucial.  The computationally intensive nature of this allocation procedure and subsequent analysis necessitates a deeper understanding of the interplay between the reduction in variance of both covariate mean differences and treatment effects, the correlation among the measured covariates, and the effect of these reduced measures on coverage probabilities for the mean difference in treatment effect. Through a series of simulation studies, we explore the sensitivity of traditional testing procedures to rerandomization based on various criteria including the affinely invariant Mahalanobis distance (@Morgan2012) and tiered covariate balancing (@LockMORGAN). 
 
 
-## Simulation Studies: All Covariates
+# Simulation Studies: Rerandomize all covariates  
 
-```{r Uncorrelated (10 Covariates)}
+In the following simulated scenarios, we generate the data for 100 observations and 25 covariates.  
 
+Note to self:  Want to include different kinds of covariates... start with all continuous predictors, then start adding in categorical 
 
+Note to self:  Need to model correlation with outcome to see how that effects inference (see Kreiger, et al pg 2)
+
+## Scenario 1A:  Continuous covariates; no correlation 
+
+```{r Sim1A Parameters, echo = TRUE}
+samp_size <- 100    #Specify the number of observations
+num_cov <- 25       #Specify the number of covariates
+C <- diag(num_cov)  #Specify matrix of correlations
 ```
 
-## Simulation Studies: Tiers of Covariates
+```{r Sim1A, echo = TRUE}
+set.seed(5172018)
 
-## Conclusion
+obs <- mvrnorm(n = 10, mu = rep(0, num_cov), Sigma = C)
+test <- initRerandomizationExperimentalDesignObject(X = obs, objective = "abs_sum_diff", obj_val_cutoff_to_include = 50, num_cores = 3)
 
-## References
+test_M <- initRerandomizationExperimentalDesignObject(X = obs, objective = "mahal_dist", obj_val_cutoff_to_include = 10000)
+
+E <- rnorm(n = samp_size) #Generate treatment effect for each observation
+
+data <- cbind(obs, E)     #Merging the data into one dataset
+```
+
+# Simulation Studies: Rerandomize tiers of covariates  
+
+# Simulation Studies: Rerandomize with blocking  
+
+Note to self:  Typical variables that should be blocked on:  age, sex
+
+
+
+# Conclusion
+
+\pagebreak
+
+# References
