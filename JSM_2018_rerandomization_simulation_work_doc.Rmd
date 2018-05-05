@@ -5,8 +5,7 @@ header-includes:
 - \usepackage{float}
 - \floatplacement{figure}{H}
 output:
-  html_document:
-    df_print: paged
+  html_notebook:
     toc: yes
     toc_depth: '2'
     theme: "yeti"
