@@ -5,13 +5,13 @@ header-includes:
 - \usepackage{float}
 - \floatplacement{figure}{H}
 output:
+  pdf_document:
+    toc: yes
+    toc_depth: 2
   html_notebook:
     toc: yes
     toc_depth: '2'
     theme: "yeti"
-  pdf_document:
-    toc: yes
-    toc_depth: 2
 bibliography: JSM2018bib.bib
 csl: ieee-with-url.csl
 ---
@@ -29,7 +29,7 @@ options(scipen = 999)
 The following packages were used in the proceeding analyses:
 
 ```{r packages, message = FALSE, warning = FALSE, echo = TRUE}
-p_load("tidyverse", "MASS", "rerandomization")
+p_load("tidyverse", "MASS", "GreedyExperimentalDesign", "knitr", "kableExtra")
 ```
 
 # Introduction/Motivation
@@ -45,7 +45,8 @@ ggplot(data = data.frame(x = 0), mapping = aes(x = x)) +
   stat_function(fun = cov_imb) + xlim(0,100) + 
   labs(y = "P(at least one covariate imbalance)", 
        x = "Number of covariates", 
-       title = "Probability of covariate imbalance as a function of \n the number of covariates") + 
+       title = "Probability of covariate imbalance as a function of 
+       the number of covariates") + 
   theme_minimal()
 ```
 
@@ -60,25 +61,38 @@ Note to self:  Want to include different kinds of covariates... start with all c
 
 Note to self:  Need to model correlation with outcome to see how that effects inference (see Kreiger, et al pg 2)
 
-## Scenario 1A:  Continuous covariates; no correlation 
+Strategy:  We want to consider an additive treatment effect:  
+$${\bf y}(1) =  {\bf y}(0) + \tau$$ and test the hypotheses:
+\begin{align*}
+H_0&:  \tau = 0\\
+H_a&:  \tau \neq 0
+\end{align*}
+
+Under this null hypothesis, the outcome is unaffected by group assignment so new randomizations can be simulated directly leaving the outcomes untouched.  For testing that $H_0$ is equal to some other value, refer to page 16 of Lock's dissertation.  
+
+We want to assess the sensitivity of t-tests to rerandomized data by calculating the type I error rate under various parameter settings.  
+
+Recall that Type I error is the rejection of a true null hypothesis.  
+
+Our null hypothesis is that there is no treatment effect.  Thus we can generate the effect data irrespective of treatment assignment of the observations.
+
+We want to 
+
+## Scenario 1A:  Continuous covariates; covariance correlation = 0; outcome correlation = 0 
 
 ```{r Sim1A Parameters, echo = TRUE}
 samp_size <- 100    #Specify the number of observations
 num_cov <- 25       #Specify the number of covariates
-C <- diag(num_cov)  #Specify matrix of correlations
+C <- diag(num_cov + 1)  #Specify matrix of correlations
 ```
 
 ```{r Sim1A, echo = TRUE}
 set.seed(5172018)
 
-obs <- mvrnorm(n = 10, mu = rep(0, num_cov), Sigma = C)
-test <- initRerandomizationExperimentalDesignObject(X = obs, objective = "abs_sum_diff", obj_val_cutoff_to_include = 50, num_cores = 3)
-
-test_M <- initRerandomizationExperimentalDesignObject(X = obs, objective = "mahal_dist", obj_val_cutoff_to_include = 10000)
-
-E <- rnorm(n = samp_size) #Generate treatment effect for each observation
-
-data <- cbind(obs, E)     #Merging the data into one dataset
+#Generate covariates, treatment effects, and merging the data 
+obs <- mvrnorm(n = samp_size, mu = rep(0, num_cov + 1), Sigma = C)
+E <- rnorm(n = samp_size, mean = 0, sd = 1) 
+data <- cbind(obs, E)
 ```
 
 # Simulation Studies: Rerandomize tiers of covariates  
