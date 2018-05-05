@@ -13,6 +13,7 @@ output:
     toc: yes
     toc_depth: 2
 bibliography: JSM2018bib.bib
+csl: ieee-with-url.csl
 ---
 
 ```{r setup, include = FALSE}
@@ -28,7 +29,7 @@ options(scipen = 999)
 The following packages were used in the proceeding analyses:
 
 ```{r packages, message = FALSE, warning = FALSE, echo = TRUE}
-p_load("tidyverse", "MASS", "GreedyExperimentalDesign")
+p_load("tidyverse", "MASS", "rerandomization")
 ```
 
 # Introduction/Motivation
