@@ -26,3 +26,5 @@ vignettes/*.pdf
 *.knit.md
 .Rproj.user
 .DS_Store
+randomization_dists.jpeg
+cov_imb_plot.jpeg
