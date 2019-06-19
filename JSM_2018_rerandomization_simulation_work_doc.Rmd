@@ -1,34 +1,389 @@
 ---
 title: "JSM 2018 Rerandomization Simulations"
 author: "Crystal Shaw"
-date: "4/2/2018"
-output: pdf_document
+header-includes:
+- \usepackage{float}
+- \floatplacement{figure}{H}
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    theme: "flatly"
+bibliography: JSM2018bib.bib
+csl: ieee-with-url.csl
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE, 
+                      fig.align = "center", cache = TRUE, eval = FALSE)
 ```
 
-```{r pacman, echo = FALSE, message = FALSE, warning = FALSE}
+```{r pacman + options, echo = FALSE, message = FALSE, warning = FALSE}
 if (!require("pacman")) 
 install.packages("pacman", repos = 'http://cran.us.r-project.org')
 options(scipen = 999)
+options(digits = 4)
+set.seed(5172018)
+```
+
+```{r Source Files}
+source("rerandomization_t.R") #Rerandomize all covariates
 ```
 
 The following packages were used in the proceeding analyses:
 
-```{r packages, message = FALSE, warning = FALSE, echo = TRUE}
-p_load("tidyverse", "MASS")
+```{r packages, echo = TRUE}
+p_load("tidyverse", "MASS", "Matrix", "knitr", "kableExtra", "magrittr", 
+       "latex2exp")
 ```
 
-## Introduction/Motivation
+# Introduction/Motivation
 
-## Simulation Studies
+Randomization has long been accepted as the "gold standard" in experimental design due to its ability to guard against confounding by creating balanced covariates across treatment groups on average.  Once underway, a randomized control trial (RCT) possesses a specified randomization scheme which when left to chance can produce unacceptable balance in one or more covariates more often than expected.  For a fixed $\alpha$ level, the probability of a significant difference in at least one covariate is given by $$1 - (1 - \alpha)^k, $$ where $k$ is the number of independent covariates. Figure \ref{fig:Covariate Imbalance Plot} illustrates the near certainty of covariate imbalances in high dimensional data settings.
 
-```{r Uncorrelated (10 Covariates)}
+```{r Covariate Imbalance Plot, fig.align = "center", fig.cap = "Probability of imbalance in at least one covariate.", out.width = "55%"}
+cov_imb <- function(n){
+  1 - (1 - 0.05)^n
+}
+
+cov_imb_plot <- ggplot(data = data.frame(x = 0), mapping = aes(x = x)) + 
+  stat_function(fun = cov_imb, geom = "line", color = "#328CC1") + xlim(0,100) + 
+  labs(y = "P(at least one covariate imbalance)", 
+       x = "Number of covariates") +
+  theme_minimal()
+
+ggsave("cov_imb_plot.jpeg", width = 7, height = 5, units = "in")
+```
+
+Rerandomization, dubbed the “platinum standard” in experimental design [@Tukey1993][@Treasure1998], can ensure covariate balance and preserve the integrity of inferences. In practice, the balance between design optimality and feasibility is crucial. 
+
+Senn (2000 Section 2.1)[from Kreiger 2016] writes that allocating a randomization using covariate information "that are [later] not included in the model" is a decision which is "pointless if not harmful" and "incoherent."  While this is certainly true, the computationally intensive nature of rerandomization and subsequent analysis necessitates a deeper understanding of the interplay between the reduction in variance of both covariate mean differences and treatment effects, the correlation among the measured covariates, and the effect of these reduced measures on coverage probabilities for the mean difference in treatment effect. In short, we want to understand the magnitude of the damage done using traditional t-tests as a function of various data characteristics.  Through a series of simulation studies, we explore the sensitivity of traditional testing procedures to rerandomization based on various criteria including the affinely invariant Mahalanobis distance [@Morgan2012] and tiered covariate balancing [@LockMORGAN]. 
+
+# Determining a cutoff for Mahalanobis Distance (M)
+Our rerandomizations will be based on Mahalanobis Distance, $M$.  This criteria for rerandomization has the desirable property of preserving the correlational  structure of the covariates.  Since $n$ here is large enough (or we can make it so) to assume multivariate normal distributions for the vectors of covariate means, we know that under pure randomization, $$M \sim \chi^2_k,$$ where $k$ is the number of covariates [@Morgan2012].  Morgan shows (pg 33 of the dissertation) that the regular formula for Mahalanobis distance can be rewritten as 
+$$M = np_w(1 - p_w)(\overline{\bf X}_T - \overline{\bf X}_C)'\text{cov}({\bf x})^{-1}(\overline{\bf X}_T - \overline{\bf X}_C),$$
+where n (sample size), $p_w$ (probability of treatment), and cov(**x**) (sample covariance matrix for the covariates) are known and consistent between randomizations, but where $\overline{\bf X}_T - \overline{\bf X}_C$ varies due to random assignment.  
+
+We want to pick a cutoff $a$ of the distribution for acceptable randomizations.  Note that the choice of $p_a$ is a balance between the desire for covariate balance and the realities of computational time.  The number of randomizations required to get one acceptable randomization follows a Geometric distribution with paramter $p_a$.  Thus the expected number of rerandomizations required to get one successful randomization is $\frac{1}{p_a}$.
+
+Section 3.3 of Lock-Morgan's dissertation shows that the balance improvement for each individual covariate decreases as $k$ increases. Thus larger numbers of covariates require a more stringent cutoff.  The general recommendation is to use the smalles $p_a$ possible given the available computing power.  
+
+The choice of $p_a$ should leave enough acceptable randomizations so that a randomization test is feasible.  The number of possible randomizations for sample size $n$ and treatment assignment probability $p_w$ is given by 
+$$\binom{n}{np_w}.$$ This will not be an issue for us because sample sizes are large enough here.
+
+We will explore a number of values for $a$ depending on the desired percent reduction in variance.
+
+# Percent Reduction in Variance 
+
+```{r Function to compute a}
+#k = number of covariates; var_red = desired balance improvement
+find_a <- function(k, var_red, a){
+  v_a = 1 - var_red
+  var_ratio <- pchisq(a, df = (k + 2), lower.tail = TRUE)/
+    pchisq(a, df = k, lower.tail = TRUE)
+  return(abs(v_a - var_ratio))
+}
+
+red_25_n10 <- optimize(find_a, k = 10, var_red = 0.25, 
+                       interval = c(0, 10))$minimum
+red_50_n10 <- optimize(find_a, k = 10, var_red = 0.50, 
+                       interval = c(0, 10))$minimum
+red_75_n10 <- optimize(find_a, k = 10, var_red = 0.75, 
+                       interval = c(0, 10))$minimum
+red_90_n10 <- optimize(find_a, k = 10, var_red = 0.90, 
+                       interval = c(0, 10))$minimum
+
+red_25_n25 <- optimize(find_a, k = 25, var_red = 0.25, 
+                       interval = c(0, 25))$minimum
+red_50_n25 <- optimize(find_a, k = 25, var_red = 0.50, 
+                       interval = c(0, 25))$minimum
+red_75_n25 <- optimize(find_a, k = 25, var_red = 0.75, 
+                       interval = c(0, 25))$minimum
+red_90_n25 <- optimize(find_a, k = 25, var_red = 0.90, 
+                       interval = c(0, 25))$minimum
+
+red_25_n50 <- optimize(find_a, k = 50, var_red = 0.25, 
+                       interval = c(0, 50))$minimum
+red_50_n50 <- optimize(find_a, k = 50, var_red = 0.50, 
+                       interval = c(0, 50))$minimum
+red_75_n50 <- optimize(find_a, k = 50, var_red = 0.75, 
+                       interval = c(0, 50))$minimum
+red_90_n50 <- optimize(find_a, k = 50, var_red = 0.90, 
+                       interval = c(0, 50))$minimum
+
+perc_red_n10 <- c(red_25_n10, red_50_n10, red_75_n10)
+perc_red_n25 <- c(red_25_n25, red_50_n25, red_75_n25)
+perc_red_n50 <- c(red_25_n50, red_50_n50, red_75_n50)
 
 ```
 
-## Conclusion
+The cutoff values for 25 covariates are given in the following table as well as the acceptance region and expected number of randomizations required to obtain just one acceptable randomization.
 
-## References
+```{r M cut-off table}
+tibble("Reduction" = c("25%", "50%", "75%", "90%"), 
+       "Cutoff" = c(perc_red_n50, red_90_n50)) %>%
+  mutate("Acceptance" = pchisq(Cutoff, df = 50), 
+         "Randomizations" = 1/Acceptance) %>%
+  kable(col.names = c("%<br/>Reduction", "Chi-Square<br/>Cutoff", 
+                      "Acceptance<br/>Probability", "Expected Randomizations
+                      for<br/> a Single Acceptance"), 
+        format = "html", align = c("c", "c", "c", "c"), escape = FALSE) %>%
+  kable_styling("striped", position = "center", full_width = FALSE)
+```
+
+# Correlation Structures
+
+We want to understand how various correlation structures impact the effect of rerandomization.  We will use the following structures in our simulations:  
+
+```{r Correlation Structures}
+tibble("Structure" = LETTERS[1:6], 
+       " " = c("Null Case; Identity Matrix", "Everything correlated 0.20", 
+               "Everything correlated 0.40", "Everything correlated 0.60", 
+               "Everything correlated 0.80", "Off-diagonal elements randomly 
+               generated from U[0,1] distribution")) %>% 
+  kable() %>% kable_styling("striped", position = "center", full_width = FALSE) 
+```
+
+# Simulation Studies: Rerandomize all covariates  
+
+In the following simulated scenarios, we generate the data for 200 observations, 50% of which will be assigned to treatment.  The number of covariates are varied in the subsections. 
+
+<!--Note to self:  Want to include different kinds of covariates... start with all continuous predictors, then start adding in categorical. 
+
+"Rerandomization improved precision, provided the outcome and covariates are correlated."[@Morgan2012 pg 11]-->
+
+We want to consider an additive treatment effect  
+$${\bf y}(1) =  {\bf y}(0) + \tau$$ and test
+\begin{align*}
+H_0&:  \tau = 0\\
+H_a&:  \tau \neq 0.
+\end{align*}
+
+Under this null hypothesis, the outcome is unaffected by group assignment so new randomizations can be simulated directly leaving the outcomes untouched.  
+
+<!--For testing that $H_0$ is equal to some other value, refer to page 16 of Lock's dissertation.-->  
+We want to assess the sensitivity of t-tests to rerandomized data by calculating the type I error rate under various parameter settings. In particular, we will vary the correlations between the covariates and also the correlation between the covariates and the outcome.  Additionally, we will explore the differences between the various levels of reduction in covariance mentioned above.  For practical reasons, we will not attempt to achieve near-perfect balance by reducing covariance by 90% as this could require upwards of 128 million randomizations!   
+
+<!--Recall that Type I error is the rejection of a true null hypothesis.  
+Our null hypothesis is that there is no treatment effect.  Thus we can generate the effect data irrespective of treatment assignment of the observations.-->
+
+## Number of Covariates = 10
+
+```{r Rerandomize all; 10 Cov}
+runs = 1000
+samp_size = 200
+num_cov = 10
+pw = 0.5
+
+results <- vector("list", (length(perc_red_n10) - 1))
+slot = 0
+
+for(r in 1:(length(results))){
+  a = perc_red_n10[r]
+  slot = slot + 1
+  trial <- replicate(runs, rerandomization_ttest(samp_size, num_cov, pw, a))
+    results[[slot]] <- trial
+  }
+```
+
+```{r Results; sample size 10}
+results_25_k10 <- results[[1]]
+results_50_k10 <- results[[2]]
+
+pvals_25_k10 <- map_dbl(results_25_k10, ~.$p_val) %>% 
+  matrix(nrow = 1000, byrow = TRUE)
+pvals_50_k10 <- map_dbl(results_50_k10, ~.$p_val) %>% 
+  matrix(nrow = 1000, byrow = TRUE)
+
+mean_diffs_25_k10 <- map(results_25_k10, ~.$mean_diffs) %>% unlist() %>% 
+  matrix(ncol = 2, byrow = TRUE) %>% as.data.frame() %>% 
+  mutate("Corr" = rep(LETTERS[1:6], 1000), 
+         "Reduction" = rep("25% Reduction", 6000))
+mean_diffs_50_k10 <- map(results_50_k10, ~.$mean_diffs) %>% unlist() %>% 
+  matrix(ncol = 2, byrow = TRUE) %>% as.data.frame() %>% 
+  mutate("Corr" = rep(LETTERS[1:6], 1000), 
+         "Reduction" = rep("50% Reduction", 6000))
+
+p_ind_25_k10 <- (pvals_25 < 0.05)*1
+p_ind_50_k10 <- (pvals_50 < 0.05)*1
+
+tibble("Reduction" = c(rep(25, 6), rep(50, 6)), 
+       "Corr" = rep(LETTERS[1:6], (length(perc_red_n10) - 1)), 
+       "Error" = c(colSums(p_ind_25)/runs, colSums(p_ind_50)/runs)) %>% 
+  kable(col.names = c("% Reduction<br/>in Covariance",
+                      "Correlation<br/>Structure",
+                      "Type I<br/>Error"), format = "html", 
+        align = c("c", "c", "c"),
+        escape = FALSE) %>%
+  kable_styling("striped", position = "center", full_width = FALSE) %>%
+  collapse_rows(columns = 1)
+
+#Plot of Distributions
+all_diffs_data_k10 <- rbind(mean_diffs_25_k10, mean_diffs_50_k10) %>% as.tibble() %>%
+  mutate_at(c("Reduction", "Corr"), as.factor)
+colnames(all_diffs_data_k10) <- c("Randomized", "Rerandomized", 
+                                  "Corr", "Reduction")
+all_diffs_data_k10 %<>% gather(key = "key", value = "value", 
+                               Randomized:Rerandomized)
+
+ggplot(data = all_diffs_data_k10, aes(value, color = key)) + 
+  geom_density() + theme_minimal() + facet_grid(Reduction ~ Corr) + 
+  theme(axis.ticks.y = element_blank(),        
+        axis.text.y = element_blank(), 
+        text = element_text(size = 10)) + 
+  xlab("Difference in Mean Outcomes") + ylab(" ")
+```
+
+## Number of Covariates = 25
+
+```{r Rerandomize all; 25 Cov}
+runs = 1000
+samp_size = 200
+num_cov = 25
+pw = 0.5
+
+results <- vector("list", (length(perc_red_n25) - 1))
+slot = 0
+
+for(r in 1:(length(results))){
+  a = perc_red_n25[r]
+  slot = slot + 1
+  trial <- replicate(runs, rerandomization_ttest(samp_size, num_cov, pw, a))
+    results[[slot]] <- trial
+  }
+```
+
+```{r Results; sample size 25}
+results_25 <- results[[1]]
+results_50 <- results[[2]]
+
+pvals_25 <- map_dbl(results_25, ~.$p_val) %>% 
+  matrix(nrow = 1000, byrow = TRUE)
+pvals_50 <- map_dbl(results_50, ~.$p_val) %>% 
+  matrix(nrow = 1000, byrow = TRUE)
+
+mean_diffs_25 <- map(results_25, ~.$mean_diffs) %>% unlist() %>% 
+  matrix(ncol = 2, byrow = TRUE) %>% as.data.frame() %>% 
+  mutate("Corr" = rep(LETTERS[1:6], 1000), 
+         "Reduction" = rep("25% Reduction", 6000))
+mean_diffs_50 <- map(results_50, ~.$mean_diffs) %>% unlist() %>% 
+  matrix(ncol = 2, byrow = TRUE) %>% as.data.frame() %>% 
+  mutate("Corr" = rep(LETTERS[1:6], 1000), 
+         "Reduction" = rep("50% Reduction", 6000))
+
+p_ind_25 <- (pvals_25 < 0.05)*1
+p_ind_50 <- (pvals_50 < 0.05)*1
+
+tibble("Reduction" = c(rep(25, 6), rep(50, 6)), 
+       "Corr" = rep(LETTERS[1:6], (length(perc_red_n25) - 1)), 
+       "Error" = c(colSums(p_ind_25)/runs, colSums(p_ind_50)/runs)) %>% 
+  kable(col.names = c("% Reduction<br/>in Covariance",
+                      "Correlation<br/>Structure",
+                      "Type I<br/>Error"), format = "html", 
+        align = c("c", "c", "c"),
+        escape = FALSE) %>%
+  kable_styling("striped", position = "center", full_width = FALSE) %>%
+  collapse_rows(columns = 1)
+
+#Plot of Distributions
+all_diffs_data <- rbind(mean_diffs_25, mean_diffs_50) %>% as.tibble() %>%
+  mutate_at(c("Reduction", "Corr"), as.factor)
+colnames(all_diffs_data) <- c("Randomized", "Rerandomized", 
+                               "Corr", "Reduction")
+all_diffs_data %<>% gather(key = "key", value = "value", 
+                           Randomized:Rerandomized) %>% filter(Corr != "A") 
+
+ggplot(data = all_diffs_data, aes(value, color = key)) + 
+  geom_density() + 
+  scale_color_manual(values = c("#D9B310", "#328CC1")) + theme_minimal() + facet_grid(Reduction ~ Corr) + 
+  theme(axis.ticks.y = element_blank(),        
+        axis.text.y = element_blank(), 
+        text = element_text(size = 10)) + 
+  xlab(" ") + ylab(" ") + theme(legend.position = "bottom")
+
+ggsave("randomization_dists.jpeg", width = 7, height = 5, units = "in")
+```
+
+## Number of Covariates = 50
+
+```{r Rerandomize all; 50 Cov}
+runs = 1000
+samp_size = 200
+num_cov = 50
+pw = 0.5
+
+results <- vector("list", (length(perc_red_n50) - 1))
+slot = 0
+
+for(r in 1:(length(results))){
+  a = perc_red_n50[r]
+  slot = slot + 1
+  trial <- replicate(runs, rerandomization_ttest(samp_size, num_cov, pw, a))
+    results[[slot]] <- trial
+  }
+```
+
+```{r Results; sample size 50}
+results_25 <- results[[1]]
+results_50 <- results[[2]]
+
+pvals_25 <- map_dbl(results_25, ~.$p_val) %>% 
+  matrix(nrow = 1000, byrow = TRUE)
+pvals_50 <- map_dbl(results_50, ~.$p_val) %>% 
+  matrix(nrow = 1000, byrow = TRUE)
+
+mean_diffs_25 <- map(results_25, ~.$mean_diffs) %>% unlist() %>% 
+  matrix(ncol = 2, byrow = TRUE) %>% as.data.frame() %>% 
+  mutate("Corr" = rep(LETTERS[1:6], 1000), 
+         "Reduction" = rep("25% Reduction", 6000))
+mean_diffs_50 <- map(results_50, ~.$mean_diffs) %>% unlist() %>% 
+  matrix(ncol = 2, byrow = TRUE) %>% as.data.frame() %>% 
+  mutate("Corr" = rep(LETTERS[1:6], 1000), 
+         "Reduction" = rep("50% Reduction", 6000))
+
+p_ind_25 <- (pvals_25 < 0.05)*1
+p_ind_50 <- (pvals_50 < 0.05)*1
+
+tibble("Reduction" = c(rep(25, 6), rep(50, 6)), 
+       "Corr" = rep(LETTERS[1:6], (length(perc_red_n50) - 1)), 
+       "Error" = c(colSums(p_ind_25)/runs, colSums(p_ind_50)/runs)) %>% 
+  kable(col.names = c("% Reduction<br/>in Covariance",
+                      "Correlation<br/>Structure",
+                      "Type I<br/>Error"), format = "html", 
+        align = c("c", "c", "c"),
+        escape = FALSE) %>%
+  kable_styling("striped", position = "center", full_width = FALSE) %>%
+  collapse_rows(columns = 1)
+
+#Plot of Distributions
+all_diffs_data <- rbind(mean_diffs_25, mean_diffs_50) %>% as.tibble() %>%
+  mutate_at(c("Reduction", "Corr"), as.factor)
+colnames(all_diffs_data) <- c("Randomized", "Rerandomized", 
+                               "Corr", "Reduction")
+all_diffs_data %<>% gather(key = "key", value = "value", 
+                           Randomized:Rerandomized)
+
+ggplot(data = all_diffs_data, aes(value, color = key)) + 
+  geom_density() + theme_minimal() + facet_grid(Reduction ~ Corr) + 
+  theme(axis.ticks.y = element_blank(),        
+        axis.text.y = element_blank(), 
+        text = element_text(size = 8)) + 
+  xlab("Difference in Mean Outcomes") + ylab(" ")
+```
+
+```{r Combined Facet Plot}
+
+```
+
+# Simulation Studies: Rerandomize tiers of covariates  
+
+# Simulation Studies: Rerandomize with blocking  
+
+<!--Note to self:  Typical variables that should be blocked on: age, sex-->
+
+# Conclusion
+
+\pagebreak
+
+# References
